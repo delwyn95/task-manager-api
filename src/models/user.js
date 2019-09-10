@@ -2,69 +2,75 @@ const mongoose = require('mongoose')
 const validator = require('validator')
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
-const Task = require ('./task')
+const Task = require('./task')
 
 //take advantage of middleware
-const userSchema = new mongoose.Schema({
-  name: {
-    type: String,
-    required: true,
-    trim: true
-  },
-  age: {
-    type: Number,
-    default: 0,
-    validate(value) {
-      if (value < 0) {
-        throw new Error('Age must be positive')
+const userSchema = new mongoose.Schema(
+  {
+    name: {
+      type: String,
+      required: true,
+      trim: true
+    },
+    age: {
+      type: Number,
+      default: 0,
+      validate(value) {
+        if (value < 0) {
+          throw new Error('Age must be positive')
+        }
       }
+    },
+    email: {
+      unique: true,
+      type: String,
+      required: true,
+      trim: true,
+      lowercase: true,
+      validate(value) {
+        if (!validator.isEmail(value)) {
+          throw new Error('Email is invalid')
+        }
+      }
+    },
+    password: {
+      type: String,
+      required: true,
+      trim: true,
+      minlength: 7,
+      validate(value) {
+        if (value.toLowerCase().includes('password')) {
+          throw new Error('Password invalid')
+        }
+      }
+    },
+    tokens: [
+      {
+        token: {
+          type: String,
+          required: true
+        }
+      }
+    ],
+    avatar: {
+      type: Buffer
     }
   },
-  email: {
-    unique: true,
-    type: String,
-    required: true,
-    trim: true,
-    lowercase: true,
-    validate(value) {
-      if (!validator.isEmail(value)) {
-        throw new Error('Email is invalid')
-      }
-    }
-  },
-  password: {
-    type: String,
-    required: true,
-    trim: true,
-    minlength: 7,
-    validate(value) {
-      if (value.toLowerCase().includes('password')) {
-        throw new Error('Password invalid')
-      }
-    }
-  },
-  tokens: [
-    {
-      token: {
-        type: String,
-        required: true
-      }
-    }
-  ]
-},{
-  timestamps:true
-})
+  {
+    timestamps: true
+  }
+)
 //virtual property:
 userSchema.virtual('tasks', {
-  ref:'Task',
+  ref: 'Task',
   localField: '_id',
-  foreignField:'owner'
+  foreignField: 'owner'
 })
 
 // accessable on instances, instance method
 userSchema.methods.generateAuthToken = async function() {
   const user = this
-  const token = jwt.sign({ _id: user._id.toString() }, 'secretkey')
+  const token = jwt.sign({ _id: user._id.toString() }, process.env.JWT_SECRET)
 
   user.tokens = user.tokens.concat({ token })
   await user.save()
@@ -78,6 +84,7 @@ userSchema.methods.toJSON = function() {
 
   delete userObject.password
   delete userObject.tokens
+  delete userObject.avatar
 
   return userObject
 }
@@ -110,10 +117,10 @@ userSchema.pre('save', async function(next) {
 })
 
 // Delete user tasks when user is removed
-userSchema.pre('remove', async function(next){
+userSchema.pre('remove', async function(next) {
   const user = this
-  await Task.deleteMany({ owner: user._id})
-  
+  await Task.deleteMany({ owner: user._id })
+
   next()
 })
 
